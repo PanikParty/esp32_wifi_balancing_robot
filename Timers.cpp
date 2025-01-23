@@ -24,7 +24,6 @@ portMUX_TYPE muxer2 = portMUX_INITIALIZER_UNLOCKED;
 
 void IRAM_ATTR timer1ISR() {
 	portENTER_CRITICAL_ISR(&muxer1);
-
 	if (dir_M1 != 0) {
 		// We generate 1us STEP pulse
 		digitalWrite(PIN_MOTOR1_STEP, HIGH);
@@ -41,7 +40,6 @@ void IRAM_ATTR timer1ISR() {
 }
 void IRAM_ATTR timer2ISR() {
 	portENTER_CRITICAL_ISR(&muxer2);
-
 	if (dir_M2 != 0) {
 		// We generate 1us STEP pulse
 		digitalWrite(PIN_MOTOR2_STEP, HIGH);
@@ -59,15 +57,21 @@ void IRAM_ATTR timer2ISR() {
 
 void initTimers() {
 
-	timer1 = timerBegin(0, 40, true);
-	timerAttachInterrupt(timer1, &timer1ISR, true);
-	timerAlarmWrite(timer1, ZERO_SPEED, true);
+//	timer1 = timerBegin(0, 40, true);
+  timer1 = timerBegin (25); // 25 Hz || 40 milliseconds
+//	timerAttachInterrupt(timer1, &timer1ISR, true);
+	timerAttachInterrupt(timer1, &timer1ISR);
+//  timerAlarmWrite(timer1, ZERO_SPEED, true);
+  timerAlarm(timer1, ZERO_SPEED, true, 0);
 
-	timer2 = timerBegin(1, 40, true);
-	timerAttachInterrupt(timer2, &timer2ISR, true);
-	timerAlarmWrite(timer2, ZERO_SPEED, true);
+//	timer2 = timerBegin(1, 40, true);
+	timer2 = timerBegin(25); // 25 Hz || 40 milliseconds
+//	timerAttachInterrupt(timer2, &timer2ISR, true);
+	timerAttachInterrupt(timer2, &timer2ISR);
+//	timerAlarmWrite(timer2, ZERO_SPEED, true);
+	timerAlarm(timer2, ZERO_SPEED, true, 0);
 
-	timerAlarmEnable(timer1);
-	timerAlarmEnable(timer2);
+//	timerAlarmEnable(timer1);
+//	timerAlarmEnable(timer2);
 
 }

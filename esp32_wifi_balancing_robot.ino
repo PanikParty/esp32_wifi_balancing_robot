@@ -11,6 +11,8 @@
 #include <Arduino.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+//#include <AsyncFsWebServer.h>
+
 #include "Control.h"
 #include "MPU6050.h"
 #include "Motors.h"
@@ -23,6 +25,7 @@
 #include "driver/timer.h"
 #include "driver/ledc.h"
 #include "esp32-hal-ledc.h"
+// #include <ESP32Servo.h>
 
 const char* PARAM_FADER1 = "fader1";
 const char* PARAM_FADER2 = "fader2";
@@ -37,13 +40,12 @@ const char* PARAM_FADER5 = "fader5";
 const char* PARAM_FADER6 = "fader6";
 
 /* Wifi Crdentials */
-String sta_ssid = "$your_ssid_maximum_32_characters";     // set Wifi network you want to connect to
-String sta_password = "$your_pswd_maximum_32_characters";        // set password for Wifi network
 
 unsigned long previousMillis = 0;
+//Servo myservo;
 
 AsyncWebServer server(80);
-
+// AsyncFsWebServer server (80.)
 void initMPU6050() {
   MPU6050_setup();
   delay(500);
@@ -82,11 +84,13 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 
-  ledcSetup(6, 50, 16); // channel 6, 50 Hz, 16-bit width
-  ledcAttachPin(PIN_SERVO, 6);   // GPIO 22 assigned to channel 1
+  ledcAttach (PIN_SERVO, 50, 16);
+//  ledcSetup(6, 50, 16); // channel 6, 50 Hz, 16-bit width
+//  ledcAttachPin(PIN_SERVO, 6);   // GPIO 22 assigned to channel 1
   delay(50);
-  ledcWrite(6, SERVO_AUX_NEUTRO);
+  ledcWrite (PIN_SERVO, SERVO_AUX_NEUTRO);
   
+
   Wire.begin();
   initMPU6050();
 
@@ -98,22 +102,25 @@ void setup() {
   Serial.println();
   Serial.println("Hostname: "+hostname);
 
-  // first, set NodeMCU as STA mode to connect with a Wifi network
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(sta_ssid.c_str(), sta_password.c_str());
-  Serial.println("");
-  Serial.print("Connecting to: ");
-  Serial.println(sta_ssid);
-  Serial.print("Password: ");
-  Serial.println(sta_password);
 
-  // try to connect with Wifi network about 8 seconds
-  unsigned long currentMillis = millis();
-  previousMillis = currentMillis;
-  while (WiFi.status() != WL_CONNECTED && currentMillis - previousMillis <= 8000) {
-    delay(500);
-    Serial.print(".");
-    currentMillis = millis();
+  if (!sta_ssid.isEmpty()) {
+    // first, set NodeMCU as STA mode to connect with a Wifi network
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(sta_ssid.c_str(), sta_password.c_str());
+    Serial.println("");
+    Serial.print("Connecting to: ");
+    Serial.println(sta_ssid);
+    Serial.print("Password: ");
+    Serial.println(sta_password);
+
+    // try to connect with Wifi network about 8 seconds
+    unsigned long currentMillis = millis();
+    previousMillis = currentMillis;
+    while (WiFi.status() != WL_CONNECTED && currentMillis - previousMillis <= 8000) {
+      delay(500);
+      Serial.print(".");
+      currentMillis = millis();
+    }
   }
 
   // if failed to connect with Wifi network set NodeMCU as AP mode
@@ -257,22 +264,25 @@ void setup() {
   for (uint8_t k = 0; k < 5; k++) {
     setMotorSpeedM1(5);
     setMotorSpeedM2(5);
-    ledcWrite(6, SERVO_AUX_NEUTRO + 250);
-    delay(200);
+//    myservo.write (90);
+    ledcWrite (PIN_SERVO, SERVO_AUX_NEUTRO + 250);
+    delay(2000);
     setMotorSpeedM1(-5);
     setMotorSpeedM2(-5);
-    ledcWrite(6, SERVO_AUX_NEUTRO - 250);
-    delay(200);
+//    myservo.write (180);
+    ledcWrite (PIN_SERVO, SERVO_AUX_NEUTRO - 250);
+    delay(2000);
   }
-  ledcWrite(6, SERVO_AUX_NEUTRO);
+//  myservo.write (0);
+  ledcWrite (PIN_SERVO, SERVO_AUX_NEUTRO);
 
   ArduinoOTA.begin();   // enable to receive update/upload firmware via Wifi OTA
 }
 
 void loop() {
   ArduinoOTA.handle();
-
   if (OSCnewMessage) {
+    Serial.println(">>");
     OSCnewMessage = 0;
     processOSCMsg();
   }
@@ -305,6 +315,7 @@ void loop() {
 
 
     if (positionControlMode) {
+      Serial.println("positionControlMode");
       // POSITION CONTROL. INPUT: Target steps for each motor. Output: motors speed
       motor1_control = positionPDControl(steps1, target_steps1, Kp_position, Kd_position, speed_M1);
       motor2_control = positionPDControl(steps2, target_steps2, Kp_position, Kd_position, speed_M2);
@@ -335,6 +346,7 @@ void loop() {
     motor1 = constrain(motor1, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT);
     motor2 = constrain(motor2, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT);
 
+    static int up_or_down = 0;
     int angle_ready;
     if (OSCpush[0])     // If we press the SERVO button we start to move
       angle_ready = 82;
@@ -342,6 +354,10 @@ void loop() {
       angle_ready = 74;  // Default angle
     if ((angle_adjusted < angle_ready) && (angle_adjusted > -angle_ready)) // Is robot ready (upright?)
         {
+      if (up_or_down != LOW) {
+        Serial.println("Robot is standing");
+        up_or_down = LOW;
+      }
       // NORMAL MODE
       digitalWrite(PIN_ENABLE_MOTORS, LOW);  // Motors enable
       // NOW we send the commands to the motors
@@ -349,6 +365,10 @@ void loop() {
       setMotorSpeedM2(motor2);
     } else   // Robot not ready (flat), angle > angle_ready => ROBOT OFF
     {
+      if (up_or_down != LOW) {
+        Serial.println("Robot is on it's back");
+        up_or_down = LOW;
+      }
       digitalWrite(PIN_ENABLE_MOTORS, HIGH);  // Disable motors
       setMotorSpeedM1(0);
       setMotorSpeedM2(0);
@@ -369,14 +389,18 @@ void loop() {
     // Push1 Move servo arm
     if (OSCpush[0]) {
       if (angle_adjusted > -40)
-        ledcWrite(6, SERVO_MAX_PULSEWIDTH);
+        //myservo.write(180);
+        ledcWrite (PIN_SERVO, SERVO_MAX_PULSEWIDTH);
       else
-        ledcWrite(6, SERVO_MIN_PULSEWIDTH);
-    } else
-      ledcWrite(6, SERVO_AUX_NEUTRO);
+        //myservo.write(90);
+        ledcWrite (PIN_SERVO, SERVO_MIN_PULSEWIDTH);
+    } else {
+      //  myservo.write(0);
+      ledcWrite (PIN_SERVO, SERVO_AUX_NEUTRO);
+    }
 
     // Servo2
-    //ledcWrite(6, SERVO2_NEUTRO + (OSCfader[2] - 0.5) * SERVO2_RANGE);
+    //ledcWrite (PIN_SERVO, SERVO2_NEUTRO + (OSCfader[2] - 0.5) * SERVO2_RANGE);
 
     // Normal condition?
     if ((angle_adjusted < 56) && (angle_adjusted > -56)) {
@@ -410,6 +434,7 @@ void processOSCMsg() {
     }
 
     if (OSCmove_mode) {
+      Serial.println ("Remote Control");
       Serial.print("M ");
       Serial.print(OSCmove_speed);
       Serial.print(" ");
@@ -421,6 +446,8 @@ void processOSCMsg() {
       target_steps1 = steps1 + OSCmove_steps1;
       target_steps2 = steps2 + OSCmove_steps2;
     } else {
+      Serial.println ("Autonomous Mode");
+
       positionControlMode = false;
       throttle = (OSCfader[0] - 0.5) * max_throttle;
       // We add some exponential on steering to smooth the center band
@@ -432,6 +459,7 @@ void processOSCMsg() {
     }
 
     if ((mode == 0) && (OSCtoggle[0])) {
+      Serial.println ("PRO Mode");
       // Change to PRO mode
       max_throttle = MAX_THROTTLE_PRO;
       max_steering = MAX_STEERING_PRO;
@@ -439,6 +467,7 @@ void processOSCMsg() {
       mode = 1;
     }
     if ((mode == 1) && (OSCtoggle[0] == 0)) {
+      Serial.println ("NORMAL Mode");
       // Change to NORMAL mode
       max_throttle = MAX_THROTTLE;
       max_steering = MAX_STEERING;
@@ -446,6 +475,7 @@ void processOSCMsg() {
       mode = 0;
     }
   } else if (OSCpage == 2) { // OSC page 2
+    Serial.println ("Modifying Control Parameters");
     if (!modifing_control_parameters) {
       for (uint8_t i = 0; i < 4; i++)
         OSCfader[i] = 0.5;
@@ -475,6 +505,7 @@ void processOSCMsg() {
 
     // Kill robot => Sleep
     while (OSCtoggle[0] == 1) {
+      Serial.println ("Robot shutdown signal");
       //Reset external parameters
       PID_errorSum = 0;
       timer_old = millis();
