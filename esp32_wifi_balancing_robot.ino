@@ -40,6 +40,8 @@ const char* PARAM_FADER5 = "fader5";
 const char* PARAM_FADER6 = "fader6";
 
 /* Wifi Crdentials */
+String sta_ssid = "LaPlaya";     // set Wifi network you want to connect to
+String sta_password = "5184Brownellst92110";        // set password for Wifi network
 
 unsigned long previousMillis = 0;
 //Servo myservo;
